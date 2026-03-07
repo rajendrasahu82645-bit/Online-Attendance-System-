@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="description" content="AttendX — Smart Barcode Attendance System using BarcodeDetector API" />
+    <title>AttendX — Smart Attendance System</title>
+    <link rel="stylesheet" href="style.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+    <!-- JsBarcode: generate barcode card images -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js" defer></script>
+    <!-- Chart.js: dashboard charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js" defer></script>
+    <!-- ZXing fallback (loaded only if BarcodeDetector not available) -->
+    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js" defer></script>
+</head>
+
+<body>
+
+    <!-- ═══════════ SIDEBAR ═══════════ -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <div class="logo-icon-wrap">
+                    <i class="fas fa-calendar-check"></i>
+                </div>
+                <span class="logo-text">AttendX</span>
+            </div>
+            <button class="icon-btn" id="sidebarToggle" aria-label="Toggle sidebar">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+
+        <nav class="sidebar-nav" role="navigation">
+            <a class="nav-item active" data-tab="dashboard" href="#" aria-current="page">
+                <i class="fas fa-th-large"></i><span>Dashboard</span>
+            </a>
+            <a class="nav-item" data-tab="students" href="#">
+                <i class="fas fa-user-graduate"></i><span>Students</span>
+            </a>
+            <a class="nav-item" data-tab="attendance" href="#">
+                <i class="fas fa-clipboard-list"></i><span>Attendance</span>
+            </a>
+            <a class="nav-item" data-tab="scanner" href="#">
+                <i class="fas fa-barcode"></i><span>Scanner</span>
+                <span class="pill">LIVE</span>
+            </a>
+            <a class="nav-item" data-tab="reports" href="#">
+                <i class="fas fa-chart-pie"></i><span>Reports</span>
+            </a>
+        </nav>
+
+        <div class="sidebar-bottom">
+            <div class="api-chip" id="apiChip">
+                <span class="api-dot"></span>
+                <span id="apiLabel">Checking API...</span>
+            </div>
+            <div class="user-card">
+                <div class="user-avatar-sm"><i class="fas fa-user"></i></div>
+                <div class="user-meta">
+                    <span class="user-name">Admin</span>
+                    <span class="user-role">System Admin</span>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ═══════════ MAIN ═══════════ -->
+    <main class="main" id="main">
+
+        <!-- Topbar -->
+        <header class="topbar">
+            <div class="topbar-left">
+                <button class="icon-btn mobile-menu-btn" id="mobileMenuBtn" aria-label="Open menu">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div>
+                    <h1 class="page-title" id="pageTitle">Dashboard</h1>
+                    <p class="breadcrumb" id="breadcrumb">Home / Dashboard</p>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="date-pill"><i class="fas fa-clock"></i><span id="liveClock"></span></div>
+                <button class="icon-btn" id="themeToggle" aria-label="Toggle theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <button class="icon-btn" id="notifBtn" aria-label="Notifications">
+                    <i class="fas fa-bell"></i>
+                    <span class="notif-dot" id="notifDot" style="display:none"></span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Toast -->
+        <div id="toast" class="toast" role="alert" aria-live="polite"></div>
+
+        <!-- ─── DASHBOARD ─── -->
+        <section class="tab-pane active" id="tab-dashboard">
+            <div class="stats-row" id="statsRow">
+                <div class="stat-card indigo reveal">
+                    <div class="stat-bg-icon"><i class="fas fa-users"></i></div>
+                    <span class="stat-label">Total Students</span>
+                    <span class="stat-val" id="sTotal">0</span>
+                    <span class="stat-sub">Registered</span>
+                </div>
+                <div class="stat-card emerald reveal">
+                    <div class="stat-bg-icon"><i class="fas fa-user-check"></i></div>
+                    <span class="stat-label">Present Today</span>
+                    <span class="stat-val" id="sPresent">0</span>
+                    <span class="stat-sub">Marked present</span>
+                </div>
+                <div class="stat-card rose reveal">
+                    <div class="stat-bg-icon"><i class="fas fa-user-times"></i></div>
+                    <span class="stat-label">Absent Today</span>
+                    <span class="stat-val" id="sAbsent">0</span>
+                    <span class="stat-sub">Marked absent</span>
+                </div>
+                <div class="stat-card violet reveal">
+                    <div class="stat-bg-icon"><i class="fas fa-percentage"></i></div>
+                    <span class="stat-label">Attendance Rate</span>
+                    <span class="stat-val" id="sRate">0%</span>
+                    <span class="stat-sub">Today</span>
+                </div>
+            </div>
+
+            <div class="dash-grid">
+                <!-- Donut chart -->
+                <div class="card reveal">
+                    <div class="card-hd">
+                        <h2><i class="fas fa-chart-pie"></i> Today's Overview</h2>
+                    </div>
+                    <div class="chart-wrap">
+                        <canvas id="donutChart"></canvas>
+                        <div class="donut-center">
+                            <span id="donutPct">0%</span>
+                            <small>Present</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Weekly bar chart -->
+                <div class="card reveal">
+                    <div class="card-hd">
+                        <h2><i class="fas fa-chart-bar"></i> Weekly Trend</h2>
+                    </div>
+                    <canvas id="weekChart" style="max-height:220px"></canvas>
+                </div>
+            </div>
+
+            <!-- Recent log -->
+            <div class="card reveal">
+                <div class="card-hd">
+                    <h2><i class="fas fa-history"></i> Recent Attendance</h2>
+                    <a href="#" class="text-btn" data-tab="reports">View All →</a>
+                </div>
+                <div class="tbl-wrap">
+                    <table class="tbl" id="dashRecentTbl">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Roll No.</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dashRecentBody">
+                            <tr>
+                                <td colspan="4" class="empty">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ─── STUDENTS ─── -->
+        <section class="tab-pane" id="tab-students">
+            <div class="card reveal">
+                <div class="card-hd">
+                    <h2><i class="fas fa-user-plus"></i> Add New Student</h2>
+                </div>
+                <div class="fg-row">
+                    <div class="fg">
+                        <label>Full Name</label>
+                        <input type="text" id="sName" placeholder="e.g. Rahul Sharma" autocomplete="off" />
+                    </div>
+                    <div class="fg">
+                        <label>Roll Number</label>
+                        <input type="text" id="sRoll" placeholder="e.g. CS2021001" autocomplete="off" />
+                    </div>
+                    <div class="fg">
+                        <label>Department</label>
+                        <input type="text" id="sDept" placeholder="e.g. Computer Science" autocomplete="off" />
+                    </div>
+                    <div class="fg align-end">
+                        <button id="addStudentBtn" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Add Student
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card reveal">
+                <div class="card-hd">
+                    <h2><i class="fas fa-list"></i> All Students</h2>
+                    <div class="search-wrap">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="searchStu" placeholder="Search name or roll..." />
+                    </div>
+                </div>
+                <div class="tbl-wrap">
+                    <table class="tbl">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Name</th>
+                                <th>Roll No.</th>
+                                <th>Department</th>
+                                <th>Card</th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentsBody">
+                            <tr>
+                                <td colspan="5" class="empty">No students yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ─── MANUAL ATTENDANCE ─── -->
+        <section class="tab-pane" id="tab-attendance">
+            <div class="card mark-card reveal">
+                <div class="card-hd">
+                    <h2><i class="fas fa-clipboard-check"></i> Mark Attendance</h2>
+                    <span class="date-pill" id="attendDateDisplay"></span>
+                </div>
+                <div class="fg-row">
+                    <div class="fg">
+                        <label>Student</label>
+                        <select id="attendStudent">
+                            <option value="">-- Select student --</option>
+                        </select>
+                    </div>
+                    <div class="fg">
+                        <label>Date</label>
+                        <input type="date" id="attendDate" />
+                    </div>
+                </div>
+                <div class="att-btns">
+                    <button id="btnPresent" class="btn btn-success btn-lg">
+                        <i class="fas fa-check-circle"></i> Mark Present
+                    </button>
+                    <button id="btnAbsent" class="btn btn-danger btn-lg">
+                        <i class="fas fa-times-circle"></i> Mark Absent
+                    </button>
+                </div>
+            </div>
+
+            <div class="card reveal">
+                <div class="card-hd">
+                    <h2><i class="fas fa-bolt"></i> Today's Log</h2>
+                    <button class="btn btn-sm btn-ghost" id="refreshAttend">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div class="tbl-wrap">
+                    <table class="tbl">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Roll No.</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendLogBody">
+                            <tr>
+                                <td colspan="4" class="empty">No records today.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ─── SCANNER ─── -->
+        <section class="tab-pane" id="tab-scanner">
+
+            <!-- Tech badge row -->
+            <div class="tech-banner card reveal">
+                <div class="tech-banner-left">
+                    <span class="tech-badge" id="techBadge">
+                        <i class="fas fa-microchip"></i> Loading scanner...
+                    </span>
+                    <p class="tech-desc" id="techDesc">Detecting optimal scanner technology...</p>
+                </div>
+                <div class="tech-banner-right">
+                    <select id="camSelect" class="cam-select">
+                        <option value="">📷 Select Camera</option>
+                    </select>
+                    <button class="btn btn-primary" id="btnStart">
+                        <i class="fas fa-play"></i> Start
+                    </button>
+                    <button class="btn btn-danger" id="btnStop" style="display:none">
+                        <i class="fas fa-stop"></i> Stop
+                    </button>
+                </div>
+            </div>
+
+            <!-- Scanner + result -->
+            <div class="scanner-layout">
+
+                <!-- Video viewport -->
+                <div class="card scanner-card reveal">
+                    <div class="viewport" id="viewport">
+                        <!-- Idle screen -->
+                        <div class="idle-screen" id="idleScreen">
+                            <div class="idle-icon-ring">
+                                <i class="fas fa-barcode"></i>
+                            </div>
+                            <p class="idle-title">Ready to Scan</p>
+                            <p class="idle-sub">Click <strong>Start</strong> and hold a barcode card in front of the
+                                camera</p>
+                        </div>
+                        <!-- Video element -->
+                        <video id="scanVideo" playsinline muted autoplay style="display:none"></video>
+                        <!-- Overlay: scan line + corners -->
+                        <div class="scan-overlay" id="scanOverlay" style="display:none">
+                            <div class="scan-line"></div>
+                            <span class="sc-corner tl"></span>
+                            <span class="sc-corner tr"></span>
+                            <span class="sc-corner bl"></span>
+                            <span class="sc-corner br"></span>
+                        </div>
+                        <!-- Success flash -->
+                        <div class="scan-flash" id="scanFlash"></div>
+                    </div>
+
+                    <!-- Status strip -->
+                    <div class="status-strip" id="statusStrip">
+                        <span class="status-led idle" id="statusLed"></span>
+                        <span id="statusMsg">Ready</span>
+                        <span class="fps-badge" id="fpsBadge" style="display:none"></span>
+                    </div>
+                </div>
+
+                <!-- Right: detected info + fallback -->
+                <div class="scanner-right">
+                    <!-- Detected student -->
+                    <div class="card result-card" id="resultCard" style="display:none">
+                        <div class="result-hd">
+                            <div class="pulse-ring"><i class="fas fa-wifi" style="transform:rotate(90deg)"></i></div>
+                            <span>Student Detected</span>
+                        </div>
+                        <div class="result-student">
+                            <div class="result-avatar" id="rAvatar">?</div>
+                            <div class="result-info">
+                                <div class="result-name" id="rName">—</div>
+                                <div class="result-roll" id="rRoll">—</div>
+                                <div class="result-dept" id="rDept">—</div>
+                            </div>
+                        </div>
+                        <div class="result-btns">
+                            <button class="btn btn-success" id="rPresent">
+                                <i class="fas fa-check-circle"></i> Present
+                            </button>
+                            <button class="btn btn-danger" id="rAbsent">
+                                <i class="fas fa-times-circle"></i> Absent
+                            </button>
+                        </div>
+                        <button class="btn btn-sm btn-ghost full-w" id="rSkip">
+                            <i class="fas fa-forward"></i> Skip / Next student
+                        </button>
+                    </div>
+
+                    <!-- Mini stats -->
+                    <div class="card reveal">
+                        <div class="card-hd">
+                            <h2><i class="fas fa-tachometer-alt"></i> Live Stats</h2>
+                        </div>
+                        <div class="mini-stats">
+                            <div class="ms emerald"><span id="msPresent">0</span><small>Present</small></div>
+                            <div class="ms rose"><span id="msAbsent">0</span><small>Absent</small></div>
+                            <div class="ms indigo"><span id="msTotal">0</span><small>Total</small></div>
+                        </div>
+                    </div>
+
+                    <!-- Manual fallback -->
+                    <div class="card reveal">
+                        <div class="card-hd">
+                            <h2><i class="fas fa-keyboard"></i> Manual Lookup</h2>
+                        </div>
+                        <p class="hint-txt">If camera fails, type the roll number below.</p>
+                        <div class="manual-row">
+                            <input type="text" id="manualInput" placeholder="Roll number…" autocomplete="off" />
+                            <button class="btn btn-primary" id="manualLookup"><i class="fas fa-search"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Barcode cards + history -->
+            <div class="bottom-grid">
+                <div class="card reveal">
+                    <div class="card-hd">
+                        <h2><i class="fas fa-id-card"></i> Student Barcode Cards</h2>
+                        <button class="btn btn-sm btn-ghost" id="btnPrint"><i class="fas fa-print"></i> Print
+                            All</button>
+                    </div>
+                    <p class="hint-txt">Click a card to enlarge. Print and distribute to students.</p>
+                    <div class="bc-grid" id="bcGrid">
+                        <p class="empty">Add students to generate cards.</p>
+                    </div>
+                </div>
+
+                <div class="card reveal">
+                    <div class="card-hd">
+                        <h2><i class="fas fa-history"></i> Scan History (Today)</h2>
+                        <button class="btn btn-sm btn-ghost" id="btnRefreshHist"><i
+                                class="fas fa-sync-alt"></i></button>
+                    </div>
+                    <div class="tbl-wrap">
+                        <table class="tbl">
+                            <thead>
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Roll No.</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="histBody">
+                                <tr>
+                                    <td colspan="3" class="empty">No scans today.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ─── REPORTS ─── -->
+        <section class="tab-pane" id="tab-reports">
+            <div class="card reveal">
+                <div class="card-hd">
+                    <h2><i class="fas fa-chart-bar"></i> Per-Student Attendance</h2>
+                    <button class="btn btn-sm btn-ghost" id="btnRefreshRpt"><i class="fas fa-sync-alt"></i>
+                        Refresh</button>
+                </div>
+                <div id="rptBars" class="rpt-bars">
+                    <p class="empty">Loading...</p>
+                </div>
+            </div>
+
+            <!-- Full log -->
+            <div class="card reveal">
+                <div class="card-hd">
+                    <h2><i class="fas fa-table"></i> Full Attendance Log</h2>
+                </div>
+                <div class="tbl-wrap">
+                    <table class="tbl">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Roll No.</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rptBody">
+                            <tr>
+                                <td colspan="4" class="empty">No records.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Barcode modal -->
+    <div id="bcModal" class="modal-bg" style="display:none" role="dialog" aria-modal="true">
+        <div class="modal-box">
+            <button class="modal-close" id="bcModalClose" aria-label="Close"><i class="fas fa-times"></i></button>
+            <p class="modal-student-name" id="modalName">—</p>
+            <p class="modal-student-roll" id="modalRoll">—</p>
+            <svg id="modalSvg" style="max-width:100%;margin:12px 0"></svg>
+            <button class="btn btn-primary" onclick="window.print()"><i class="fas fa-print"></i> Print Card</button>
+        </div>
+    </div>
+
+    <script src="app.js" type="module"></script>
+</body>
+
+</html>
