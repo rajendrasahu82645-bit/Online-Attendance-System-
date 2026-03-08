@@ -4,7 +4,7 @@ app =flask(__name__)
 
 @app.route("/")
 def home():
-    return "Backend s running"
+    return "server running successfully"
 
 if __name__== "__main__":
     app.run()
